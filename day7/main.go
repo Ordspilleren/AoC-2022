@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -24,6 +25,7 @@ type File struct {
 type Filesystem []*Directory
 
 var totalSizes int
+var candidatesForDeletion []int
 
 func (d *Directory) PropagateSize() {
 	if d.Parent != nil {
@@ -78,6 +80,23 @@ func (f Filesystem) Iterate() {
 	}
 }
 
+func (d *Directory) FindSmallestForDeletion(availableSpace int, usedSpace int, unusedSpaceNeeded int) {
+	for _, directory := range d.Directories {
+		if (availableSpace-usedSpace)+directory.Size >= unusedSpaceNeeded {
+			candidatesForDeletion = append(candidatesForDeletion, directory.Size)
+		}
+		directory.FindSmallestForDeletion(availableSpace, usedSpace, unusedSpaceNeeded)
+	}
+}
+
+func (f Filesystem) Cleanup(availableSpace int, unusedSpaceNeeded int) {
+	for _, directory := range f {
+		directory.FindSmallestForDeletion(availableSpace, f[0].Size, unusedSpaceNeeded)
+	}
+	sort.Ints(candidatesForDeletion)
+	log.Printf("Directory to delete: %d", candidatesForDeletion)
+}
+
 func main() {
 	data, err := os.Open("input.txt")
 	if err != nil {
@@ -125,4 +144,6 @@ func main() {
 	}
 	filesystem.Iterate()
 	log.Printf("Total sizes: %d", totalSizes)
+
+	filesystem.Cleanup(70000000, 30000000)
 }
