@@ -4,26 +4,82 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
-/*
 type Directory struct {
 	Name        string
-	Directories []Directory
+	Size        int
+	Directories []*Directory
 	Files       []File
+	Parent      *Directory
 }
-*/
-
-type Directory map[string][]File
 
 type File struct {
 	Name string
-	Size string
+	Size int
+}
+
+type Filesystem []*Directory
+
+var totalSizes int
+
+func (d *Directory) PropagateSize() {
+	if d.Parent != nil {
+		d.Parent.Size += d.Size
+	}
+}
+
+func (d *Directory) CalculateSize() {
+	d.PropagateSize()
+	for _, file := range d.Files {
+		d.Size += file.Size
+	}
+	for _, directory := range d.Directories {
+		directory.CalculateSize()
+		d.Size += directory.Size
+	}
+}
+
+func (d *Directory) FindCulprits() {
+	if d.Size <= 100000 {
+		totalSizes += d.Size
+		log.Printf("Directory %s has size %d", d.Name, d.Size)
+	}
+	for _, directory := range d.Directories {
+		directory.FindCulprits()
+	}
+}
+
+func (d *Directory) Print(depth int) {
+	for _, directory := range d.Directories {
+		var depthString strings.Builder
+		for i := 0; i < depth; i++ {
+			depthString.WriteString("    ")
+		}
+		log.Printf("%s%s (dir, size=%d)", depthString.String(), directory.Name, directory.Size)
+		for _, file := range directory.Files {
+			log.Printf("%s%s%s (file, size=%d)", &depthString, &depthString, file.Name, file.Size)
+		}
+		directory.Print(depth + 1)
+	}
+}
+
+func (f Filesystem) Iterate() {
+	for _, directory := range f {
+		directory.CalculateSize()
+		log.Printf("%s (dir, size=%d)", directory.Name, directory.Size)
+		for _, file := range directory.Files {
+			log.Printf("    %s (file, size=%d)", file.Name, file.Size)
+		}
+		directory.Print(1)
+		directory.FindCulprits()
+	}
 }
 
 func main() {
-	data, err := os.Open("input_test.txt")
+	data, err := os.Open("input.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,21 +87,42 @@ func main() {
 
 	scanner := bufio.NewScanner(data)
 
-	filesystem := make(Directory)
-	var currentDir strings.Builder
+	filesystem := Filesystem{}
+	var currentDir *Directory
 	for scanner.Scan() {
+		splitOutput := strings.Split(scanner.Text(), " ")
 		if strings.Contains(scanner.Text(), "$ cd") {
-			dir := strings.Split(scanner.Text(), " ")[2]
+			dir := splitOutput[2]
 			if dir == ".." {
-				currentDir.Reset()
+				currentDir = currentDir.Parent
+				continue
 			}
-			currentDir.WriteString(dir)
-			if _, ok := filesystem[currentDir.String()]; !ok {
-				currentDir.WriteString("/")
-				filesystem[currentDir.String()] = []File{}
+			var duplicateDir *Directory
+			if currentDir != nil {
+				for i := range currentDir.Directories {
+					if currentDir.Directories[i].Name == dir {
+						duplicateDir = currentDir.Directories[i]
+					}
+				}
 			}
+			if duplicateDir == nil {
+				directory := Directory{Name: dir, Parent: currentDir}
+				if currentDir != nil {
+					currentDir.Directories = append(currentDir.Directories, &directory)
+				} else {
+					filesystem = append(filesystem, &directory)
+				}
+				currentDir = &directory
+			} else {
+				currentDir = duplicateDir
+			}
+		} else if strings.ContainsAny(splitOutput[0], "1234567890") {
+			fileName := splitOutput[1]
+			fileSize, _ := strconv.Atoi(splitOutput[0])
+			file := File{Name: fileName, Size: fileSize}
+			currentDir.Files = append(currentDir.Files, file)
 		}
 	}
-
-	log.Print(filesystem)
+	filesystem.Iterate()
+	log.Printf("Total sizes: %d", totalSizes)
 }
