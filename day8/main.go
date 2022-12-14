@@ -7,32 +7,39 @@ import (
 )
 
 type Tree struct {
-	Height  int
-	Visible bool
+	Height      int
+	Visible     bool
+	ScenicScore int
 }
 
 type Trees [][]*Tree
 
-func (t *Tree) VisibleFromRow(trees []*Tree) bool {
-	visible := true
+func (t *Tree) VisibleFromRow(trees []*Tree, reverse bool) (bool, int) {
+	viewingDistance := 0
 	for i := range trees {
+		if reverse {
+			i = len(trees) - 1 - i
+		}
+		viewingDistance++
 		if trees[i].Height >= t.Height {
-			visible = false
-			break
+			return false, viewingDistance
 		}
 	}
-	return visible
+	return true, viewingDistance
 }
 
-func (t *Tree) VisibleFromColumn(trees Trees, currentTreeIndex int) bool {
-	visible := true
+func (t *Tree) VisibleFromColumn(trees Trees, currentTreeIndex int, reverse bool) (bool, int) {
+	viewingDistance := 0
 	for i := range trees {
+		if reverse {
+			i = len(trees) - 1 - i
+		}
+		viewingDistance++
 		if trees[i][currentTreeIndex].Height >= t.Height {
-			visible = false
-			break
+			return false, viewingDistance
 		}
 	}
-	return visible
+	return true, viewingDistance
 }
 
 func (t Trees) CalculateVisibility() {
@@ -52,16 +59,18 @@ func (t Trees) CalculateVisibility() {
 
 			leftTrees := t[treeRow][:tree]
 			rightTrees := t[treeRow][tree+1:]
-
-			if len(rightTrees) >= 2 {
-				log.Print(rightTrees[0])
-			}
-
 			topTrees := t[:treeRow]
 			bottomTrees := t[treeRow+1:]
 
-			currentTree.Visible = currentTree.VisibleFromRow(leftTrees) || currentTree.VisibleFromRow(rightTrees) ||
-				currentTree.VisibleFromColumn(topTrees, tree) || currentTree.VisibleFromColumn(bottomTrees, tree)
+			visibleFromLeft, leftViewingDistance := currentTree.VisibleFromRow(leftTrees, true)
+			visibleFromRight, rightViewingDistance := currentTree.VisibleFromRow(rightTrees, false)
+			visibleFromTop, topViewingDistance := currentTree.VisibleFromColumn(topTrees, tree, true)
+			visibleFromBottom, bottomViewingDistance := currentTree.VisibleFromColumn(bottomTrees, tree, false)
+
+			currentTree.ScenicScore = leftViewingDistance * rightViewingDistance * topViewingDistance * bottomViewingDistance
+			currentTree.Visible = visibleFromLeft || visibleFromRight || visibleFromTop || visibleFromBottom
+
+			log.Printf("Row: %d\nHeight: %d\nScenic Score: %d\n\n", treeRow, currentTree.Height, currentTree.ScenicScore)
 		}
 	}
 }
@@ -91,12 +100,16 @@ func main() {
 	trees.CalculateVisibility()
 
 	nVisible := 0
+	higestScenicScore := 0
 	for treeRow := range trees {
 		for tree := range trees[treeRow] {
 			if trees[treeRow][tree].Visible {
 				nVisible++
 			}
+			if trees[treeRow][tree].ScenicScore > higestScenicScore {
+				higestScenicScore = trees[treeRow][tree].ScenicScore
+			}
 		}
 	}
-	log.Printf("Number of visible trees: %d", nVisible)
+	log.Printf("Number of visible trees: %d\nHighest Scenic Score: %d", nVisible, higestScenicScore)
 }
